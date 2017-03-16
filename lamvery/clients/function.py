@@ -43,7 +43,7 @@ class LambdaClient(BaseClient):
             return envs
         new_envs = {}
         for k, v in envs.iteritems():
-            resp = self._kms.encrypt(KeyId=key_id, Plaintext=bytearray().extend(v))
+            resp = self._kms.encrypt(KeyId=key_id, Plaintext=str.encode(v))
             new_envs[k] = resp['CiphertextBlob']
         return new_envs
 
