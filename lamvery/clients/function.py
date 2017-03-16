@@ -38,15 +38,14 @@ class LambdaClient(BaseClient):
                 return splitted[1]
         return ""
 
-    def _get_encrypted_envs(self, key_id, envlist):
-        env_dict = {}
-        for env in envlist:
-            if key_id and 'encrypt' in env and env['encrypt']:
-                resp = self._kms.encrypt(KeyId=key_id, Plaintext=env['value'])
-                env_dict[env['key']] = resp['CiphertextBlob']
-                continue
-            env_dict[env['key']] = env['value']
-        return env_dict
+    def _get_encrypted_envs(self, key_id, envs):
+        if not key_id:
+            return envs
+        new_envs = {}
+        for k, v in envs.iteritems():
+            resp = self._kms.encrypt(KeyId=key_id, Plaintext=bytearray().extend(v))
+            new_envs[k] = resp['CiphertextBlob']
+        return new_envs
 
     def create_function(self, zipfile, conf, publish):
         kwargs = {}
@@ -80,10 +79,8 @@ class LambdaClient(BaseClient):
         environment_variables = conf.get('environment_variables')
         if environment_variables is not None:
             key_id = self._extract_key_id_from_arn(key_arn)
-            envs = self._get_encrypted_envs(key_id, conf['environment_variables'])
-
             kwargs['Environment'] = {'Variables': {}}
-            kwargs['Environment']['Variables'] = envs
+            kwargs['Environment']['Variables'] = self._get_encrypted_envs(key_id, conf['environment_variables'])
 
         if not self._dry_run:
             self._lambda.create_function(**kwargs)
@@ -132,10 +129,8 @@ class LambdaClient(BaseClient):
         environment_variables = conf.get('environment_variables')
         if environment_variables is not None:
             key_id = self._extract_key_id_from_arn(key_arn)
-            envs = self._get_encrypted_envs(key_id, conf['environment_variables'])
-
             kwargs['Environment'] = {'Variables': {}}
-            kwargs['Environment']['Variables'] = envs
+            kwargs['Environment']['Variables'] = self._get_encrypted_envs(key_id, conf['environment_variables'])
 
         if not self._dry_run:
             self._lambda.update_function_configuration(**kwargs)
