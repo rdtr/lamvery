@@ -42,7 +42,7 @@ class LambdaClient(BaseClient):
         env_dict = {}
         for env in envlist:
             if env['encrypted'] and key_id:
-                resp = self._kms.encrypt(KeyID=key_id, Plaintext=env['value'])
+                resp = self._kms.encrypt(KeyId=key_id, Plaintext=env['value'])
                 env_dict[env['key']] = resp['CiphertextBlob']
                 continue
             env_dict[env['key']] = env['value']
