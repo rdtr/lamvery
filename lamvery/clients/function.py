@@ -2,6 +2,7 @@
 
 import botocore
 import hashlib
+import base64
 import lamvery.config
 
 from lamvery.clients.base import BaseClient
@@ -31,20 +32,11 @@ class LambdaClient(BaseClient):
     def _get_runtime(self, conf):
         return lamvery.config.DEFAULT_RUNTIME_NODE_JS if conf['runtime'] == 'nodejs' else conf['runtime']
 
-    def _extract_key_id_from_arn(self, key_arn):
-        if key_arn:
-            splitted = key_arn.rsplit("/", 1)
-            if len(splitted) == 2:
-                return splitted[1]
-        return ""
-
-    def _get_encrypted_envs(self, key_id, envs):
-        if not key_id:
-            return envs
+    def _get_encrypted_envs(self, key_arn, envs):
         new_envs = {}
         for k, v in envs.iteritems():
-            resp = self._kms.encrypt(KeyId=key_id, Plaintext=str.encode(v))
-            new_envs[k] = resp['CiphertextBlob'].decode('utf-8')
+            resp = self._kms.encrypt(KeyId=key_arn, Plaintext=v)
+            new_envs[k] = base64.b64decode(resp['CiphertextBlob'])
         return new_envs
 
     def create_function(self, zipfile, conf, publish):
@@ -78,9 +70,9 @@ class LambdaClient(BaseClient):
 
         environment_variables = conf.get('environment_variables')
         if environment_variables is not None:
-            key_id = self._extract_key_id_from_arn(key_arn)
+            envs = self._get_encrypted_envs(key_arn, conf['environment_variables']) if key_arn else conf['environment_variables']
             kwargs['Environment'] = {'Variables': {}}
-            kwargs['Environment']['Variables'] = self._get_encrypted_envs(key_id, conf['environment_variables'])
+            kwargs['Environment']['Variables'] = envs
 
         if not self._dry_run:
             self._lambda.create_function(**kwargs)
@@ -128,9 +120,9 @@ class LambdaClient(BaseClient):
 
         environment_variables = conf.get('environment_variables')
         if environment_variables is not None:
-            key_id = self._extract_key_id_from_arn(key_arn)
+            envs = self._get_encrypted_envs(key_arn, conf['environment_variables']) if key_arn else conf['environment_variables']
             kwargs['Environment'] = {'Variables': {}}
-            kwargs['Environment']['Variables'] = self._get_encrypted_envs(key_id, conf['environment_variables'])
+            kwargs['Environment']['Variables'] = envs
 
         if not self._dry_run:
             self._lambda.update_function_configuration(**kwargs)
