@@ -13,6 +13,7 @@ class LambdaClient(BaseClient):
     def __init__(self, *args, **kwargs):
         super(LambdaClient, self).__init__(*args, **kwargs)
         self._lambda = self._session.client('lambda')
+        self._kms = self._session.client('kms')
 
     def get_function_conf(self, name, alias=None):
         try:
@@ -29,6 +30,23 @@ class LambdaClient(BaseClient):
 
     def _get_runtime(self, conf):
         return lamvery.config.DEFAULT_RUNTIME_NODE_JS if conf['runtime'] == 'nodejs' else conf['runtime']
+
+    def _extract_key_id_from_arn(self, key_arn):
+        if key_arn:
+            splitted = key_arn.rsplit("/", 1)
+            if len(splitted) == 2:
+                return splitted[1]
+        return ""
+
+    def _get_encrypted_envs(self, key_id, envlist):
+        env_dict = {}
+        for env in envlist:
+            if env['encrypted'] and key_id:
+                resp = self._kms.encrypt(KeyID=key_id, Plaintext=env['value'])
+                env_dict[env['key']] = resp['CiphertextBlob']
+                continue
+            env_dict[env['key']] = env['value']
+        return env_dict
 
     def create_function(self, zipfile, conf, publish):
         kwargs = {}
@@ -55,15 +73,17 @@ class LambdaClient(BaseClient):
         if vpc_config is not None:
             kwargs['VpcConfig'] = self._build_vpc_config(vpc_config)
 
+        key_arn = conf.get('kms_key_arn')
+        if key_arn is not None:
+            kwargs['KMSKeyArn'] = key_arn
+
         environment_variables = conf.get('environment_variables')
         if environment_variables is not None:
-            kwargs['Environment'] = {'Variables': {}}
-            kwargs['Environment']['Variables'] = conf['environment_variables']
+            key_id = self._extract_key_id_from_arn(key_arn)
+            envs = self._get_encrypted_envs(key_id, conf['environment_variables'])
 
-        kms_key_arn = conf.get('kms_key_arn')
-        if kms_key_arn is not None:
-            kwargs['KMSKeyArn'] = kms_key_arn
-        print "gotcha! {0}".format(kms_key_arn)
+            kwargs['Environment'] = {'Variables': {}}
+            kwargs['Environment']['Variables'] = envs
 
         if not self._dry_run:
             self._lambda.create_function(**kwargs)
@@ -105,15 +125,17 @@ class LambdaClient(BaseClient):
         if vpc_config is not None:
             kwargs['VpcConfig'] = self._build_vpc_config(vpc_config)
 
+        key_arn = conf.get('kms_key_arn')
+        if key_arn is not None:
+            kwargs['KMSKeyArn'] = key_arn
+
         environment_variables = conf.get('environment_variables')
         if environment_variables is not None:
-            kwargs['Environment'] = {'Variables': {}}
-            kwargs['Environment']['Variables'] = conf['environment_variables']
+            key_id = self._extract_key_id_from_arn(key_arn)
+            envs = self._get_encrypted_envs(key_id, conf['environment_variables'])
 
-        kms_key_arn = conf.get('kms_key_arn')
-        if kms_key_arn is not None:
-            kwargs['KMSKeyArn'] = kms_key_arn
-        print "gotcha! {0}".format(kms_key_arn)
+            kwargs['Environment'] = {'Variables': {}}
+            kwargs['Environment']['Variables'] = envs
 
         if not self._dry_run:
             self._lambda.update_function_configuration(**kwargs)
