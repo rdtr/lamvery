@@ -60,6 +60,11 @@ class LambdaClient(BaseClient):
             kwargs['Environment'] = {'Variables': {}}
             kwargs['Environment']['Variables'] = conf['environment_variables']
 
+        kms_key_arn = conf.get('kms_key_arn')
+        if kms_key_arn is not None:
+            kwargs['KMSKeyArn'] = kms_key_arn
+        print "gotcha! {0}".format(kms_key_arn)
+
         if not self._dry_run:
             self._lambda.create_function(**kwargs)
 
