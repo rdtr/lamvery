@@ -44,7 +44,7 @@ class LambdaClient(BaseClient):
         new_envs = {}
         for k, v in envs.iteritems():
             resp = self._kms.encrypt(KeyId=key_id, Plaintext=str.encode(v))
-            new_envs[k] = resp['CiphertextBlob']
+            new_envs[k] = resp['CiphertextBlob'].decode('utf-8')
         return new_envs
 
     def create_function(self, zipfile, conf, publish):
